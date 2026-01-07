@@ -11,7 +11,7 @@ contract Pair is ReentrancyGuard {
     // Konstante za fee, base i minimum liquidity. Ne mogu zakucati 0.97 jer solidity ne podrzava decimalne brojeve
     uint256 public constant FEE = 30;
     uint256 public constant BASE = 1000;
-    uint256 public constant MINIMUM_LIQUIDITY = 1000;
+    uint256 public constant MINIMUM_LIQUIDITY = 1000000;
 
     //Dodati tokenA i tokenB kao immutable varijable jer se postavljaju samo jednom u konstruktoru
     IERC20 public immutable i_tokenA;
@@ -58,9 +58,33 @@ contract Pair is ReentrancyGuard {
 
 
 
-    function removeLiquidity () external {}
-    function mint() external {}
-    function burn() external {} 
+    function removeLiquidity (uint256 shares) external nonReentrant returns (uint256 amountA, uint256 amountB) {
+        require (shares > 0, "Shares must be greater than zero");
+        require (shares <= balances[msg.sender], "Insufficient shares to burn");
+        //racunam koliko tokenA i tokenB korisnik treba da dobije
+        amountA = (shares * reserveA) / totalSupply;
+        amountB = (shares * reserveB) / totalSupply;
+        require(amountA > 0 && amountB > 0, "Insufficient amounts to withdraw");
+        //burnovanje share-ova, koristio sam CEI pattern, pa prvo burnujem pa onda saljem tokene(dodatni security)
+        burn(msg.sender, shares);
+        reserveA -= amountA;
+        reserveB -= amountB;
+        //transfer tokenA i tokenB korisniku
+        i_tokenA.safeTransfer(msg.sender, amountA);
+        i_tokenB.safeTransfer(msg.sender, amountB);
+
+
+        return (amountA, amountB);
+    }
+    function mint(address to, uint256 shares) private {
+        balances[to] += shares;
+        totalSupply += shares;
+    }
+    function burn(address from, uint256 shares) private {
+        require(balances[from] >= shares, "Insufficient balance to burn");
+        balances[from] -= shares;
+        totalSupply -= shares;
+    } 
     function swap() external {}
 
 
