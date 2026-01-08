@@ -8,10 +8,10 @@ import {Pair} from "./Pair.sol";
 
 contract Router {
     using SafeERC20 for IERC20;
-    Factory public immutable factory;
+    Factory public immutable FACTORY;
     
     constructor(address factoryAddress) {
-        factory = Factory(factoryAddress);
+        FACTORY = Factory(factoryAddress);
     }
 
     modifier ensure(uint256 deadline){
@@ -22,7 +22,7 @@ contract Router {
     function addLiquidity(address tokenA, address tokenB, uint256 amountADesired, uint256 amountBDesired,uint256 amountAMin,uint256 amountBMin, address to, uint256 deadline) public ensure(deadline) returns (uint256 amountA, uint256 amountB, uint256 shares) {
         require(to != address(0), "Router: INVALID_TO_ADDRESS");
 
-        address pairAddress = factory.getPair(tokenA, tokenB);
+        address pairAddress = FACTORY.getPair(tokenA, tokenB);
         require(pairAddress != address(0), "Router: PAIR_NOT_EXIST");
 
         (amountA, amountB) = calculateLiquidityAmounts(pairAddress, tokenA, tokenB, amountADesired, amountBDesired, amountAMin,  amountBMin);
@@ -30,8 +30,8 @@ contract Router {
         IERC20(tokenA).safeTransferFrom(msg.sender, pairAddress, amountA);
         IERC20(tokenB).safeTransferFrom(msg.sender, pairAddress, amountB);
 
-        IERC20(tokenA).forceApprove(pairAddress, amountA);
-        IERC20(tokenB).forceApprove(pairAddress, amountB);
+        //IERC20(tokenA).forceApprove(pairAddress, amountA);
+        //IERC20(tokenB).forceApprove(pairAddress, amountB);
 
         shares = Pair(pairAddress).addLiquidity(amountA, amountB, to);
 
@@ -40,7 +40,7 @@ contract Router {
     function removeLiquidity(address tokenA, address tokenB, uint256 shares, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) public ensure(deadline) returns (uint256 amountA, uint256 amountB) {
         require(to != address(0), "Router: INVALID_TO_ADDRESS");
 
-        address pairAddress = factory.getPair(tokenA, tokenB);
+        address pairAddress = FACTORY.getPair(tokenA, tokenB);
         require(pairAddress != address(0), "Router: PAIR_NOT_EXIST");
 
         require(Pair(pairAddress).transferFrom(msg.sender, address(this), shares), "Router: TRANSFER_FAILED");
@@ -80,7 +80,37 @@ contract Router {
                 amountB = amountBDesiredSorted;
             }
         }
-
         return (amountA, amountB);
     }
+
+    function SwapExactTokensForTokens(address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOutMin, address to, uint256 deadline) public ensure(deadline) returns (uint256 amountOut) {
+        require(to != address(0), "Router: INVALID_TO_ADDRESS");
+        require(amountIn > 0, "Router: INSUFFICIENT_INPUT_AMOUNT");
+        address pairAddress = FACTORY.getPair(tokenIn, tokenOut);
+        require(pairAddress != address(0), "Router: PAIR_NOT_EXIST");
+
+        IERC20(tokenIn).safeTransferFrom(msg.sender, pairAddress, amountIn);
+        IERC20(tokenIn).forceApprove(pairAddress, amountIn);
+        
+        amountOut = Pair(pairAddress).swap(amountIn, amountOutMin, tokenOut, to);
+        return amountOut;
+    }
+    function swapTokensToExactTokens(address tokenIn, address tokenOut, uint256 amountOut, uint256 amountInMax, address to, uint256 deadline) public ensure(deadline) returns (uint256 amountIn) {
+        require(to != address(0), "Router: INVALID_TO_ADDRESS");
+        require(amountOut > 0, "Router: INSUFFICIENT_OUTPUT_AMOUNT");
+        address pairAddress = FACTORY.getPair(tokenIn, tokenOut);
+        require(pairAddress != address(0), "Router: PAIR_NOT_EXIST");
+
+        amountIn = Pair(pairAddress).getAmountIn(amountOut, tokenOut);
+        require(amountIn <= amountInMax, "Router: EXCESSIVE_INPUT_AMOUNT");
+
+        IERC20(tokenIn).safeTransferFrom(msg.sender,address(this), amountIn);
+        IERC20(tokenIn).forceApprove(pairAddress, amountIn);
+
+        uint256 actualAmountOut = Pair(pairAddress).swap(amountIn, amountOut, tokenOut, to);
+        require(actualAmountOut >= amountOut, "Router: INSUFFICIENT_OUTPUT_AMOUNT");
+
+        return amountIn;
+    }
+
 }

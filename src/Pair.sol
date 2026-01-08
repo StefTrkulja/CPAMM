@@ -182,5 +182,18 @@ contract Pair is ReentrancyGuard {
         emit Transfer(from, to, amount);
         return true;
     }
+
+    function getAmountIn(uint256 amountOut, address tokenOut) external view returns (uint256 amountIn) {
+        require(amountOut > 0, "AmountOut must be greater than zero");
+        require(tokenOut == address(I_TOKEN_A) || tokenOut == address(I_TOKEN_B), "Invalid tokenOut address");
+
+        bool isTokenOutA = tokenOut == address(I_TOKEN_A);
+        (uint256 reserveIn, uint256 reserveOut) = isTokenOutA ? (reserveB, reserveA) : (reserveA, reserveB);
+        require(reserveIn > 0 && reserveOut > 0, "Insufficient liquidity in the pool");
+        require(amountOut < reserveOut, "Insufficient liquidity");
+        amountIn = (reserveIn * amountOut * BASE) / ((reserveOut - amountOut) * (BASE - FEE)) + 1;
+        return amountIn;
+    }
+
 }
 
