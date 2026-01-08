@@ -163,7 +163,24 @@ contract Pair is ReentrancyGuard {
         emit Sync(reserveA, reserveB);
 
         return amountOut;
+    }     
+
+    function getReserves() external view returns (uint256 _reserveA, uint256 _reserveB) {
+        _reserveA = reserveA;
+        _reserveB = reserveB;
     }
 
-
+    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
+        require(balances[from] >= amount, "Insufficient balance");
+        if (from != msg.sender) {
+            require(allowance[from][msg.sender] >= amount, "Insufficient allowance");
+            allowance[from][msg.sender] -= amount;
+            emit Approval(from, msg.sender, allowance[from][msg.sender]);
+        }
+        balances[from] -= amount;
+        balances[to] += amount;
+        emit Transfer(from, to, amount);
+        return true;
+    }
 }
+
