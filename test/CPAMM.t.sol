@@ -59,11 +59,13 @@ contract CPAMMTest is Test {
 
     // FACTORY ******************************************************************************************************************************************
 
+
+    // provera da li getPair vraca ispravnu adresu Pair contracta nakon kreiranja istog
     function testFactory__CreatePairSuccess() external view {
         address pairAddress = factory.getPair(address(tokenA), address(tokenB));
         assertEq(pairAddress, address(pair));
     }
-
+	  // proverava da li Factory emituje odgovarajuci event (PairCreated) kada se kreira novi Pair
     function testFactory__CreatePairEmitsEvent() external {
         ERC20Mock tokenC = new ERC20Mock();
         
@@ -73,38 +75,38 @@ contract CPAMMTest is Test {
         address newPair = factory.createPair(address(tokenA), address(tokenC));
         assertTrue(newPair != address(0));
     }
-
+	// provera da li getPair vraca ispravnu adresu Pair contracta
     function testFactory__GetPairReturnsCorrectAddress() external view {
         address pairAddress = factory.getPair(address(tokenA), address(tokenB));
         assertEq(pairAddress, address(pair));
     }
-
+	// provera da li allPairsLength vraca ispravan broj kreiranih Pair contracta
     function testFactory__AllPairsReturnsCorrectLength() external view {
         uint256 length = factory.allPairsLength();
         assertEq(length, 1);
     }
-
+ // proverava da li je moguce kreirati Pair sa istim adresama tokena i da li pravilno revertuje
     function testFactory__CreatePairIdenticalAddressesReverts() external {
         vm.expectRevert(Factory.Factory__IdenticalAddresses.selector);
         factory.createPair(address(tokenA), address(tokenA));
     }
-
+// proverava da li je moguce kreirati pair sa zero adresom i da li pravilno revertuje
     function testFactory__CreatePairZeroAddressReverts() external {
         vm.expectRevert(Factory.Factory__ZeroAddress.selector);
         factory.createPair(address(0), address(tokenB));
     }
-
+// proverava da li korisnik moze da kreira par koji vec postoji i da li pravilno revertuje
     function testFactory__CreatePairPairExistsReverts() external {
         vm.expectRevert(Factory.Factory__PairExists.selector);
         factory.createPair(address(tokenA), address(tokenB));
     }
-
+// proverava da li getPair vraca ispravnu adresu Pair contracta kada se tokeni proslede u obrnutom redosledu, getPair(A,B) = getPair(B,A)
     function testFactory__GetPairReverseOrder() external view {
         address pairAddress1 = factory.getPair(address(tokenA), address(tokenB));
         address pairAddress2 = factory.getPair(address(tokenB), address(tokenA));
         assertEq(pairAddress1, pairAddress2);
     }
-
+// proverava da li je moguce kreirati vise parova i da li allPairsLength vraca ispravan broj kreiranih parova
     function testFactory__CreateMultiplePairs() external {
         ERC20Mock tokenC = new ERC20Mock();
         address pairAddress2 = factory.createPair(address(tokenA), address(tokenC));
@@ -114,17 +116,17 @@ contract CPAMMTest is Test {
     }
 
     // PAIR ******************************************************************************************************************************************
-
+// Proverava da li su pocetne rezerve para nula
     function testPair__InitialReservesAreZero() external view {
         (uint256 reserveA, uint256 reserveB) = pair.getReserves();
         assertEq(reserveA, 0);
         assertEq(reserveB, 0);
     }
-
+// Proverava da li je pocetni total supply LP tokena nula pre mintovanja
     function testPair__InitialTotalSupplyIsZero() external view {
         assertEq(pair.totalSupply(), 0);
     }
-
+// Proverava da li su tokenA i tokenB nepromenljive adrese
     function testPair__TokensAreImmutable() external view {
         assertEq(pair.tokenA(), address(tokenA));
         assertEq(pair.tokenB(), address(tokenB));
@@ -132,6 +134,7 @@ contract CPAMMTest is Test {
 
     // PAIR TESTS - ADD LIQUIDITY ***********************************************************************************************************************
 
+		// proverava da li prvi LP dobija ispravan iznos LP tokena prilikom dodavanja likvidnosti, sqrt(amountA * amountB) - MINIMUM_LIQUIDITY. 
     function testPair__FirstLiquidityProviderMinting() external {
         vm.startPrank(liquidityProvider);
         
@@ -151,7 +154,7 @@ contract CPAMMTest is Test {
         
         vm.stopPrank();
     }
-
+		// Proverava se da li sledeci LPovi dobijaju ispravan iznos LP tokena prilikom dodavanja likvidnosti
     function testPair__SubsequentLiquidityProviderMinting() external {
         vm.startPrank(user1);
         tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
@@ -176,6 +179,7 @@ contract CPAMMTest is Test {
         vm.stopPrank();
     }
 
+   // Proverava da li addLiquidity emituje odgovarajuci event (Mint) sa ispravnim parametrima
     function testPair__MintEmitsCorrectEvents() external {
         vm.startPrank(liquidityProvider);
         
@@ -189,7 +193,7 @@ contract CPAMMTest is Test {
         
         vm.stopPrank();
     }
-
+	// Proverava da li se reserveA i reserveB pravilno azuriraju nakon dodavanja likvidnosti
     function testPair__UpdateReservesAfterMint() external {
         vm.startPrank(liquidityProvider);
         
@@ -204,6 +208,7 @@ contract CPAMMTest is Test {
         vm.stopPrank();
     }
 
+	//Proverava da li se mintuje ispravan iznos LP tokena prilikom dodavanja likvidnosti
     function testPair__MintsCorrectLPAmount() external {
         vm.startPrank(liquidityProvider);
         
@@ -218,6 +223,7 @@ contract CPAMMTest is Test {
         vm.stopPrank();
     }
 
+		// Proverava da li je prvih 1000 lp tokena zakljucano (locked) na zero adresi
     function testPair__LockMinimumLiquidity() external {
         vm.startPrank(liquidityProvider);
         
@@ -231,7 +237,8 @@ contract CPAMMTest is Test {
     }
 
     // PAIR - ADD LIQUIDITY ERRORS ********************************************************************************************************
-
+	
+		// proverava da korisnik ne moe dodati likvidnosst sa nula kolicinama tokena i da li pravilno revertuje
     function testPair__MintWithZeroAmountsReverts() external {
         vm.startPrank(liquidityProvider);
         
@@ -240,7 +247,7 @@ contract CPAMMTest is Test {
         
         vm.stopPrank();
     }
-
+		// proverava da ne mozes mintovati ako je poslato premalo tokenA ili tokenB i da li pravilno revertuje
     function testPair__InsufficientLiquidityMintedReverts() external {
         vm.startPrank(liquidityProvider);
         
@@ -252,7 +259,7 @@ contract CPAMMTest is Test {
         
         vm.stopPrank();
     }
-
+		// proverava da ne mogu da se mintuju tokeni na zro adresu i da li pravilno revertuje
     function testPair__MintToZeroAddressReverts() external {
         vm.startPrank(liquidityProvider);
         
@@ -266,7 +273,7 @@ contract CPAMMTest is Test {
     }
 
     // PAIR TESTS - REMOVE LIQUIDITY ********************************************************************************************************
-
+		// Proverava se da korisnik moze uspesno da burnuje tokene i da dobije nazad odgovarajucu kolicinu tokenA i tokenB
     function testPair__BurnLiquidityTokens() external {
         vm.startPrank(liquidityProvider);
         tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
@@ -285,6 +292,7 @@ contract CPAMMTest is Test {
         vm.stopPrank();
     }
 
+	// Proverava da burn vraca ispravan iznos tokenA i tokenB na osnovu formule (burnAmount * reserve) / totalSupply
     function testPair__ReturnsCorrectAmountsOnBurn() external {
         vm.startPrank(liquidityProvider);
         
@@ -307,6 +315,7 @@ contract CPAMMTest is Test {
         vm.stopPrank();
     }
 
+// provera da se rezerve smanjuju ispravno nakon uklanjanja likvidnosti
     function testPair__UpdateReservesAfterBurn() external {
         vm.startPrank(liquidityProvider);
         
@@ -328,11 +337,13 @@ contract CPAMMTest is Test {
 
     // PAIR - REMOVE LIQUIDITY ERRORS ********************************************************************************************************
 
+	// Proverava da li burn sa nulom tokena revertuje
     function testPair__BurnWithZeroSharesReverts() external {
         vm.expectRevert(Pair.Pair__SharesMustBeGreaterThanZero.selector);
         pair.removeLiquidity(0, liquidityProvider);
     }
 
+  //proverava da ne mozes burnovati vise tokena nego sto imas i da li pravilno revertuje
     function testPair__InsufficientBalanceReverts() external {
         vm.startPrank(liquidityProvider);
         
@@ -343,9 +354,9 @@ contract CPAMMTest is Test {
     }
 
     // PAIR - SWAP ********************************************************************************************************
-
+   // sledeca 2 proveravaju da li swap radi kako treba za oba smera (tokenA za tokenB i obrnuto) i da li korisnik dobija ispravan iznos tokena nakon swapa
     function testPair__SwapExactAForB() external {
-
+     
         vm.startPrank(liquidityProvider);
         tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
         tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
@@ -387,7 +398,7 @@ contract CPAMMTest is Test {
         
         vm.stopPrank();
     }
-
+		// Proverava da se rezerve pravilno azuriraju nakon swapa
     function testPair__UpdateReservesAfterSwap() external {
         vm.startPrank(liquidityProvider);
         tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
@@ -407,7 +418,7 @@ contract CPAMMTest is Test {
         
         vm.stopPrank();
     }
-
+  // Proverava da se naplacuju feejevi prilikom swapa
     function testPair__AppliesFeeOnSwap() external {
         vm.startPrank(liquidityProvider);
         tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
@@ -428,7 +439,7 @@ contract CPAMMTest is Test {
         
         vm.stopPrank();
     }
-
+		// Proverava da K invarijanta ne opada nakon swapa(raste(zbog feeja) ili ostaje ista), najbitnija provera!
     function testPair__MaintainsConstantProductInvariant() external {
         vm.startPrank(liquidityProvider);
         tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
@@ -452,19 +463,20 @@ contract CPAMMTest is Test {
     }
 
     // PAIR - SWAP ERRORS ********************************************************************************************************
-
+		// Proverava da li swap sa nulom kolicinom ulaznog tokena revertuje
     function testPair__SwapWithZeroAmountInReverts() external {
         vm.expectRevert(Pair.Pair__AmountInMustBeGreaterThanZero.selector);
         pair.swap(0, 1, address(tokenB), user1);
     }
 
+    // Proverava da li swap na nevalidan token revertuje
     function testPair__SwapWithInvalidTokenReverts() external {
         ERC20Mock tokenC = new ERC20Mock();
         
         vm.expectRevert(Pair.Pair__InvalidTokenToSwapTo.selector);
         pair.swap(100, 1, address(tokenC), user1);
     }
-
+		// Proverava da li swap ne moze da se izvrsi ako nema dovoljno likvidnosti u poolu i da li pravilno revertuje
     function testPair__SwapInsufficientLiquidityReverts() external {
         vm.startPrank(user1);
         
@@ -475,7 +487,7 @@ contract CPAMMTest is Test {
         
         vm.stopPrank();
     }
-
+   // Proverava da li swap ne moze da se izvrsi ako je trazeni izlazni iznos veci od moguceg i da li pravilno revertuje, slippage
     function testPair__SwapInsufficientOutputAmountReverts() external {
         vm.startPrank(liquidityProvider);
         tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
@@ -494,7 +506,7 @@ contract CPAMMTest is Test {
     }
 
     // PAIR - ERC20 LP TOKENS ********************************************************************************************************
-
+		// Proverava da li korisnik moze da transferise LP tokene izmedju adresa (Router ce koristiti ovu funkcionalnost)
     function testPair__TransferLPTokens() external {
         vm.startPrank(liquidityProvider);
         tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
@@ -509,7 +521,7 @@ contract CPAMMTest is Test {
         
         vm.stopPrank();
     }
-
+	 //Proverava da li korisnik moze da odobri drugom korisniku da trosi njegove LP tokene(Router ce koristiti ovu funkcionalnost)
     function testPair__ApproveLPTokens() external {
         vm.startPrank(liquidityProvider);
         
@@ -519,7 +531,7 @@ contract CPAMMTest is Test {
         
         vm.stopPrank();
     }
-
+		// Proverava da li korisnik moze da transferise LP tokene koristeci allowance mehanizam
     function testPair__TransferFromLPTokens() external {
         vm.startPrank(liquidityProvider);
         tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
@@ -535,7 +547,7 @@ contract CPAMMTest is Test {
         
         assertEq(pair.balanceOf(user2), transferAmount);
     }
-
+		// Proverava da li transfer emituje odgovarajuci event
     function testPair__TransferEmitsEvent() external {
         vm.startPrank(liquidityProvider);
         tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
@@ -550,6 +562,7 @@ contract CPAMMTest is Test {
         vm.stopPrank();
     }
 
+    // Proverava da li approval emituje odgovarajuci event
     function testPair__ApprovalEmitsEvent() external {
         vm.startPrank(liquidityProvider);
         
@@ -560,7 +573,7 @@ contract CPAMMTest is Test {
         
         vm.stopPrank();
     }
-
+   // Proverava da li transfer sa nedovoljnim balansom revertuje
     function testPair__TransferInsufficientBalanceReverts() external {
         vm.startPrank(liquidityProvider);
         
@@ -569,7 +582,7 @@ contract CPAMMTest is Test {
         
         vm.stopPrank();
     }
-
+ // Proverava da li transfer na zero adresu revertuje
     function testPair__TransferToZeroAddressReverts() external {
         vm.startPrank(liquidityProvider);
         tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
@@ -581,7 +594,7 @@ contract CPAMMTest is Test {
         
         vm.stopPrank();
     }
-
+    // Proverava da li transferFrom sa nedovoljnim allowance-om revertuje
     function testPair__TransferFromInsufficientAllowanceReverts() external {
         vm.startPrank(liquidityProvider);
         tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
@@ -596,6 +609,8 @@ contract CPAMMTest is Test {
 
     // ROUTER ********************************************************************************************************
 
+
+     // Proverava da li korisnik moze uspesno da doda likvidnost preko Router-a
     function testRouter__AddLiquiditySuccess() external {
         vm.startPrank(user1);
         
@@ -619,7 +634,7 @@ contract CPAMMTest is Test {
         
         vm.stopPrank();
     }
-
+    // Proverava da li korisnik moze uspesno da ukloni likvidnost preko Router-a
     function testRouter__RemoveLiquiditySuccess() external {
         vm.startPrank(user1);
         
@@ -650,7 +665,7 @@ contract CPAMMTest is Test {
         
         vm.stopPrank();
     }
-
+   // Proverava da li korisnik moze uspesno da izvrsi swap tacno odredjene kolicine tokenA za tokenB preko Router-a
     function testRouter__SwapExactTokensForTokensSuccess() external {
         vm.startPrank(liquidityProvider);
         tokenA.approve(address(router), LIQUIDITY_AMOUNT_A);
@@ -685,7 +700,8 @@ contract CPAMMTest is Test {
         
         vm.stopPrank();
     }
-
+		// ROUTER - ERRORS ********************************************************************************************************
+		// Proverava da li addLiquidity revertuje ako je prosledjeni deadline istekao
     function testRouter__RevertWhen_DeadlineExpired() external {
         vm.startPrank(user1);
         
@@ -707,7 +723,7 @@ contract CPAMMTest is Test {
         
         vm.stopPrank();
     }
-
+		// Proverava se da li Router moze izvrsiti operaciju ako nema approve za tokenA i tokenB od strane korisnika
     function testRouter__RevertWhen_InsufficientAllowance() external {
         vm.startPrank(user1);
         
@@ -727,7 +743,7 @@ contract CPAMMTest is Test {
 
     // SECURITY TESTS ********************************************************************************************************
 
-
+		// Proverava da li velike kolicine tokena ne izazivaju overflow u Pair contractu tokom dodavanja likvidnosti i swapa
     function testSecurity__NoOverflowOnLargeAmounts() external {
 
         uint256 largeAmount = 10**30; 
@@ -749,7 +765,7 @@ contract CPAMMTest is Test {
         
         vm.stopPrank();
     }
-
+		// proverava da li napadac ne moze da isprazni rezerve poola cak i sa ogromnim swapom zbog slippage zastite
     function testSecurity__CannotDrainReserves() external {
         vm.startPrank(liquidityProvider);
         tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
@@ -767,7 +783,7 @@ contract CPAMMTest is Test {
         
         vm.stopPrank();
     }
-
+ // Proverava da li K raste ili ostaje isti nakon velikog swapa, sto pokazuje otpornost na manipulaciju cenom
     function testSecurity__PriceManipulationResistance() external {
         vm.startPrank(liquidityProvider);
         tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
@@ -788,7 +804,7 @@ contract CPAMMTest is Test {
         uint256 kAfter = reserve0After * reserve1After;
         assertGt(kAfter, kBefore, "K invariant should increase due to fees");
     }
-
+	// Proverava da li su minimalni LP tokeni zakljucani i ne mogu biti iskorišćeni od strane LP-a
     function testSecurity__MinimumLiquidityLock() external {
         vm.startPrank(liquidityProvider);
         tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
@@ -803,7 +819,7 @@ contract CPAMMTest is Test {
         
         vm.stopPrank();
     }
-
+		// Proverava da napadac ne moze da ukrade tokene iz Pair contracta slanjem tokena direktno na njega bez koriscenja swap funkcije
     function testSecurity__CannotStealTokensByDirectTransfer() external {
         vm.startPrank(liquidityProvider);
         tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
@@ -820,7 +836,7 @@ contract CPAMMTest is Test {
         
         vm.stopPrank();
     }
-
+		// Proverava da li slippage zastita pravilno funkcionise i sprecava velike gubitke tokom swapa
     function testSecurity__SlippageProtection() external {
         vm.startPrank(liquidityProvider);
         tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
@@ -837,7 +853,7 @@ contract CPAMMTest is Test {
         
         vm.stopPrank();
     }
-
+		// Proverava da K invarijanta ne opada nakon vise swap operacija
     function testSecurity__KInvariantValidation() external {
         vm.startPrank(liquidityProvider);
         tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
@@ -860,7 +876,7 @@ contract CPAMMTest is Test {
         
         assertGt(kAfter, kBefore, "K invariant violated");
     }
-
+		// Proverava da korisnik ne moze burnovati tudje LP tokene bez odobrenja
     function testSecurity__NoTokenApprovalBypass() external {
         vm.startPrank(liquidityProvider);
         tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
@@ -873,7 +889,7 @@ contract CPAMMTest is Test {
         pair.removeLiquidity(lpTokens, user1);
         vm.stopPrank();
     }
-
+   // Proverava da li addLiquidity revertuje ako je prosledjeni deadline istekao
     function testSecurity__RouterDeadlineEnforced() external {
         vm.startPrank(user1);
         tokenA.approve(address(router), LIQUIDITY_AMOUNT_A);
