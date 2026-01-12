@@ -5,13 +5,14 @@ import {IERC20} from "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20
 import {SafeERC20} from "../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "../lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
 import {MathLib} from "../lib/MathLib.sol";
+
 contract Pair is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     // Konstante za fee, base i minimum liquidity. Ne mogu zakucati 0.97 jer solidity ne podrzava decimalne brojeve
     uint256 public constant FEE = 30;
     uint256 public constant BASE = 1000;
-    uint256 public constant MINIMUM_LIQUIDITY = 1000000;
+    uint256 public constant MINIMUM_LIQUIDITY = 1000;
 
     //Dodati tokenA i tokenB kao immutable varijable jer se postavljaju samo jednom u konstruktoru
     IERC20 public immutable I_TOKEN_A;
@@ -43,15 +44,8 @@ contract Pair is ReentrancyGuard {
         uint256 amountB,
         uint256 sharesBurned
     );
-    event Sync(
-        uint256 reserveA,
-        uint256 reserveB
-    );
-    event Transfer(
-        address indexed from,
-        address indexed to,
-        uint256 value
-    );
+    event Sync(uint256 reserveA, uint256 reserveB);
+    event Transfer(address indexed from, address indexed to, uint256 value);
     event Approval(
         address indexed owner,
         address indexed spender,
@@ -63,94 +57,120 @@ contract Pair is ReentrancyGuard {
         I_TOKEN_B = IERC20(_tokenB);
     }
 
-    function addLiquidity (uint256 amountA, uint256 amountB, address to) external nonReentrant returns (uint256 sharesMinted) {
-        //Proverava da su uneti iznosi veci od nule
-        require(amountA > 0 && amountB > 0, "Amounts must be greater than zero");
-        //Transferuje tokenA i tokenB iz korisnikovog walleta na ovaj ugovor
-        I_TOKEN_A.safeTransferFrom(msg.sender, address(this), amountA);
-        I_TOKEN_B.safeTransferFrom(msg.sender, address(this), amountB);
-        //Racunanje broja share-ova koje treba mintovati
+    function addLiquidity(
+        uint256 amountA,
+        uint256 amountB,
+        address to
+    ) external nonReentrant returns (uint256 sharesMinted) {
+        require(
+            amountA > 0 && amountB > 0,
+            "Amounts must be greater than zero"
+        );
+
+        uint256 balanceA = I_TOKEN_A.balanceOf(address(this));
+        uint256 balanceB = I_TOKEN_B.balanceOf(address(this));
+
+        uint256 actualAmountA = balanceA - reserveA;
+        uint256 actualAmountB = balanceB - reserveB;
+        require(actualAmountA >= amountA && actualAmountB >= amountB);
+
         if (totalSupply == 0) {
-            sharesMinted = MathLib.sqrt(amountA * amountB) - MINIMUM_LIQUIDITY;
-            totalSupply += MINIMUM_LIQUIDITY; // Zakljucavamo MINIMUM_LIQUIDITY
+            sharesMinted =
+                MathLib.sqrt(actualAmountA * actualAmountB) -
+                MINIMUM_LIQUIDITY;
+            totalSupply += MINIMUM_LIQUIDITY;
         } else {
-            uint256 shareA = (amountA * totalSupply) / reserveA;
-            uint256 shareB = (amountB * totalSupply) / reserveB;
+            uint256 shareA = (actualAmountA * totalSupply) / reserveA;
+            uint256 shareB = (actualAmountB * totalSupply) / reserveB;
             sharesMinted = MathLib.min(shareA, shareB);
         }
         require(sharesMinted > 0, "Insufficient liquidity minted");
         require(to != address(0), "Invalid address");
-        //Mintovanje share-ova korisniku
-        //mint();
-        
-        //Updateovanje rezerva
-        reserveA = I_TOKEN_A.balanceOf(address(this));
-        reserveB = I_TOKEN_B.balanceOf(address(this));
-        //nemoj zab da dodas evente
-        emit Mint(to, amountA, amountB, sharesMinted);
+        require(to != address(this), "Cannot mint to pair");
+
+        mint(to, sharesMinted);
+
+        reserveA = balanceA;
+        reserveB = balanceB;
+
+        emit Mint(to, actualAmountA, actualAmountB, sharesMinted);
         emit Sync(reserveA, reserveB);
 
         return sharesMinted;
-
     }
 
-    function removeLiquidity (uint256 shares) external nonReentrant returns (uint256 amountA, uint256 amountB) {
-        require (shares > 0, "Shares must be greater than zero");
-        require (shares <= balances[msg.sender], "Insufficient shares to burn");
-        //racunam koliko tokenA i tokenB korisnik treba da dobije
+    function removeLiquidity(
+        uint256 shares,
+        address from
+    ) external nonReentrant returns (uint256 amountA, uint256 amountB) {
+        require(shares > 0, "Shares must be greater than zero");
+        uint256 shareBalance = balances[address(this)];
+        require(shareBalance >= shares, "Insufficient shares received");
+
         amountA = (shares * reserveA) / totalSupply;
         amountB = (shares * reserveB) / totalSupply;
         require(amountA > 0 && amountB > 0, "Insufficient amounts to withdraw");
-        //burnovanje share-ova, koristio sam CEI pattern, pa prvo burnujem pa onda saljem tokene(dodatni security)
-        burn(msg.sender, shares);
+        burn(address(this), shares);
         reserveA -= amountA;
         reserveB -= amountB;
-        //transfer tokenA i tokenB korisniku
-        I_TOKEN_A.safeTransfer(msg.sender, amountA);
-        I_TOKEN_B.safeTransfer(msg.sender, amountB);
+        I_TOKEN_A.safeTransfer(from, amountA);
+        I_TOKEN_B.safeTransfer(from, amountB);
 
-        emit Burn(msg.sender, amountA, amountB, shares);
+        emit Burn(from, amountA, amountB, shares);
         emit Sync(reserveA, reserveB);
         return (amountA, amountB);
     }
+
     function mint(address to, uint256 shares) private {
         balances[to] += shares;
         totalSupply += shares;
         emit Transfer(address(0), to, shares);
     }
+
     function burn(address from, uint256 shares) private {
         require(balances[from] >= shares, "Insufficient balance to burn");
         balances[from] -= shares;
         totalSupply -= shares;
         emit Transfer(from, address(0), shares);
     }
-    /*Prvo cu proveriti da li je amountin validna, i da li je swapping to Token A ili Token B
-      Onda cu cu pogledati rezerve i izracunati koliko korisnik treba da dobije tokena nakon swapa
-        Koristicu formulu sa fee-jem: amountOut = (amountIn * (BASE - FEE) * reserveOut) / (reserveIn * BASE + amountIn * (BASE - FEE))
-        Provericu da li je izracunati amountOut veci ili jednak od minAmountOut
-        Azuriracu rezerve nakon swapa
-     */ 
-    function swap(uint256 amountIn, uint256 minAmountOut, address swappingTo, address to) external nonReentrant returns (uint256 amountOut) {
-        require (amountIn > 0, "AmountIn must be greater than zero");
-        require (swappingTo == address(I_TOKEN_A) || swappingTo == address(I_TOKEN_B), "Invalid token to swap to");
+
+    function swap(
+        uint256 amountIn,
+        uint256 minAmountOut,
+        address swappingTo,
+        address to
+    ) external nonReentrant returns (uint256 amountOut) {
+        require(amountIn > 0, "AmountIn must be greater than zero");
+        require(
+            swappingTo == address(I_TOKEN_A) ||
+                swappingTo == address(I_TOKEN_B),
+            "Invalid token to swap to"
+        );
         bool isSwappingToA = swappingTo == address(I_TOKEN_A);
-        //Prvo bitno sam napisao sa IFom, ali sam onda video da moze lepse sa ternary operatorom, a i more gas efficient je.
-        (IERC20 tokenIn, IERC20 tokenOut, uint256 reserveIn, uint256 reserveOut) = isSwappingToA ? (I_TOKEN_B, I_TOKEN_A, reserveB, reserveA) : (I_TOKEN_A, I_TOKEN_B, reserveA, reserveB);
-        //Transferujem tokenIn od korisnika
-        require(reserveIn > 0 && reserveOut > 0, "Insufficient liquidity in the pool");
-        tokenIn.safeTransferFrom(msg.sender, address(this), amountIn);
+        (
+            IERC20 tokenIn,
+            IERC20 tokenOut,
+            uint256 reserveIn,
+            uint256 reserveOut
+        ) = isSwappingToA
+                ? (I_TOKEN_B, I_TOKEN_A, reserveB, reserveA)
+                : (I_TOKEN_A, I_TOKEN_B, reserveA, reserveB);
+
+        require(
+            reserveIn > 0 && reserveOut > 0,
+            "Insufficient liquidity in the pool"
+        );
+
         uint256 balanceIn = tokenIn.balanceOf(address(this));
-        // Racunam stvarni amountIn koji je dosao na ugovor u slucaju da je token sa fee-jem pri transferu
-        // Postoje ERC20 tokeni koji uzimaju fee prilikom transfera, pa je bitno da izracunam stvarni amountIn
         uint256 actualAmountIn = balanceIn - reserveIn;
         require(actualAmountIn > 0, "Insufficient amount in after transfer");
-        // Racunam amountIn sa fee-jem
         uint256 amountInWithFee = (actualAmountIn * (BASE - FEE)) / BASE;
-        amountOut = (amountInWithFee * reserveOut) / (reserveIn + amountInWithFee);
+        amountOut =
+            (amountInWithFee * reserveOut) /
+            (reserveIn + amountInWithFee);
         require(amountOut >= minAmountOut, "Insufficient output amount");
         require(amountOut > 0, "AmountOut must be greater than zero");
         require(amountOut < reserveOut, "Not enough liquidity for this trade");
-        // prvo updateujem rezerve pa onda saljem tokene, CEI pattern
         if (isSwappingToA) {
             reserveA -= amountOut;
             reserveB += actualAmountIn;
@@ -163,17 +183,29 @@ contract Pair is ReentrancyGuard {
         emit Sync(reserveA, reserveB);
 
         return amountOut;
-    }     
+    }
 
-    function getReserves() external view returns (uint256 _reserveA, uint256 _reserveB) {
+    function getReserves()
+        external
+        view
+        returns (uint256 _reserveA, uint256 _reserveB)
+    {
         _reserveA = reserveA;
         _reserveB = reserveB;
     }
 
-    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
+    function transferFrom(
+        address from,
+        address to,
+        uint256 amount
+    ) external returns (bool) {
+        require(to != address(0), "Transfer to zero address");
         require(balances[from] >= amount, "Insufficient balance");
         if (from != msg.sender) {
-            require(allowance[from][msg.sender] >= amount, "Insufficient allowance");
+            require(
+                allowance[from][msg.sender] >= amount,
+                "Insufficient allowance"
+            );
             allowance[from][msg.sender] -= amount;
             emit Approval(from, msg.sender, allowance[from][msg.sender]);
         }
@@ -183,17 +215,49 @@ contract Pair is ReentrancyGuard {
         return true;
     }
 
-    function getAmountIn(uint256 amountOut, address tokenOut) external view returns (uint256 amountIn) {
+    function transfer(address to, uint256 amount) external returns (bool) {
+        require(to != address(0), "Transfer to zero address");
+        require(balances[msg.sender] >= amount, "Insufficient balance");
+        balances[msg.sender] -= amount;
+        balances[to] += amount;
+        emit Transfer(msg.sender, to, amount);
+        return true;
+    }
+
+    function approve(address spender, uint256 amount) external returns (bool) {
+        allowance[msg.sender][spender] = amount;
+        emit Approval(msg.sender, spender, amount);
+        return true;
+    }
+
+    function getAmountIn(
+        uint256 amountOut,
+        address tokenOut
+    ) external view returns (uint256 amountIn) {
         require(amountOut > 0, "AmountOut must be greater than zero");
-        require(tokenOut == address(I_TOKEN_A) || tokenOut == address(I_TOKEN_B), "Invalid tokenOut address");
+        require(
+            tokenOut == address(I_TOKEN_A) || tokenOut == address(I_TOKEN_B),
+            "Invalid tokenOut address"
+        );
 
         bool isTokenOutA = tokenOut == address(I_TOKEN_A);
-        (uint256 reserveIn, uint256 reserveOut) = isTokenOutA ? (reserveB, reserveA) : (reserveA, reserveB);
-        require(reserveIn > 0 && reserveOut > 0, "Insufficient liquidity in the pool");
+        (uint256 reserveIn, uint256 reserveOut) = isTokenOutA
+            ? (reserveB, reserveA)
+            : (reserveA, reserveB);
+        require(
+            reserveIn > 0 && reserveOut > 0,
+            "Insufficient liquidity in the pool"
+        );
         require(amountOut < reserveOut, "Insufficient liquidity");
-        amountIn = (reserveIn * amountOut * BASE) / ((reserveOut - amountOut) * (BASE - FEE)) + 1;
+
+        uint256 numerator = reserveIn * amountOut * BASE;
+        uint256 denominator = (reserveOut - amountOut) * (BASE - FEE);
+        amountIn = (numerator / denominator) + 1;
+
         return amountIn;
     }
 
+    function balanceOf(address account) external view returns (uint256) {
+        return balances[account];
+    }
 }
-

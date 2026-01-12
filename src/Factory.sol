@@ -2,7 +2,6 @@
 
 pragma solidity ^0.8.30;
 
-import {IERC20} from "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {Pair} from "./Pair.sol";
 
 contract Factory {
@@ -14,13 +13,23 @@ contract Factory {
         address pair,
         uint256
     );
+
     function allPairsLength() external view returns (uint256) {
         return allPairs.length;
     }
-    function createPair(address tokenA, address tokenB) external returns (address pair){
+
+    function createPair(
+        address tokenA,
+        address tokenB
+    ) external returns (address pair) {
         require(tokenA != tokenB, "Factory: IDENTICAL_ADDRESSES");
-        require(tokenA != address(0) && tokenB != address(0), "Factory: ZERO_ADDRESS");
-        (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
+        require(
+            tokenA != address(0) && tokenB != address(0),
+            "Factory: ZERO_ADDRESS"
+        );
+        (address token0, address token1) = tokenA < tokenB
+            ? (tokenA, tokenB)
+            : (tokenB, tokenA);
         require(getPair[token0][token1] == address(0), "Factory: PAIR_EXISTS");
         pair = address(new Pair(token0, token1));
 
