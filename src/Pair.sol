@@ -356,6 +356,12 @@ contract Pair is ReentrancyGuard {
         return amountIn;
     }
 
+    function tokenA () external view returns (address) {
+        return address(I_TOKEN_A);
+    }
+    function tokenB () external view returns (address) {
+        return address(I_TOKEN_B);
+    }
     function balanceOf(address account) external view returns (uint256) {
         return balances[account];
     }
