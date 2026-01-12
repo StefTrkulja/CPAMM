@@ -1,4 +1,4 @@
-// SPDX License-Identifier: MIT
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
 import {IERC20} from "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
@@ -52,6 +52,9 @@ contract Pair is ReentrancyGuard {
         uint256 value
     );
 
+
+    
+
     constructor(address _tokenA, address _tokenB) {
         I_TOKEN_A = IERC20(_tokenA);
         I_TOKEN_B = IERC20(_tokenB);
@@ -72,13 +75,21 @@ contract Pair is ReentrancyGuard {
 
         uint256 actualAmountA = balanceA - reserveA;
         uint256 actualAmountB = balanceB - reserveB;
-        require(actualAmountA >= amountA && actualAmountB >= amountB);
+        require(
+            actualAmountA >= amountA && actualAmountB >= amountB,
+            "Insufficient tokens transferred"
+        );
+        require(actualAmountA > 0 && actualAmountB > 0, "No tokens received");
 
         if (totalSupply == 0) {
-            sharesMinted =
-                MathLib.sqrt(actualAmountA * actualAmountB) -
-                MINIMUM_LIQUIDITY;
-            totalSupply += MINIMUM_LIQUIDITY;
+            sharesMinted = MathLib.sqrt(actualAmountA * actualAmountB);
+            require(
+                sharesMinted > MINIMUM_LIQUIDITY,
+                "Insufficient liquidity minted"
+            );
+            // Mint MINIMUM_LIQUIDITY to address(0) to prevent division by zero
+            mint(address(0), MINIMUM_LIQUIDITY);
+            sharesMinted -= MINIMUM_LIQUIDITY;
         } else {
             uint256 shareA = (actualAmountA * totalSupply) / reserveA;
             uint256 shareB = (actualAmountB * totalSupply) / reserveB;
@@ -110,6 +121,10 @@ contract Pair is ReentrancyGuard {
         amountA = (shares * reserveA) / totalSupply;
         amountB = (shares * reserveB) / totalSupply;
         require(amountA > 0 && amountB > 0, "Insufficient amounts to withdraw");
+        require(
+            amountA <= reserveA && amountB <= reserveB,
+            "Insufficient reserves"
+        );
         burn(address(this), shares);
         reserveA -= amountA;
         reserveB -= amountB;
@@ -164,6 +179,10 @@ contract Pair is ReentrancyGuard {
         uint256 balanceIn = tokenIn.balanceOf(address(this));
         uint256 actualAmountIn = balanceIn - reserveIn;
         require(actualAmountIn > 0, "Insufficient amount in after transfer");
+        require(
+            actualAmountIn >= amountIn,
+            "AmountIn mismatch - not enough tokens transferred"
+        );
         uint256 amountInWithFee = (actualAmountIn * (BASE - FEE)) / BASE;
         amountOut =
             (amountInWithFee * reserveOut) /
@@ -171,13 +190,24 @@ contract Pair is ReentrancyGuard {
         require(amountOut >= minAmountOut, "Insufficient output amount");
         require(amountOut > 0, "AmountOut must be greater than zero");
         require(amountOut < reserveOut, "Not enough liquidity for this trade");
+
+        uint256 newReserveA;
+        uint256 newReserveB;
         if (isSwappingToA) {
-            reserveA -= amountOut;
-            reserveB += actualAmountIn;
+            newReserveA = reserveA - amountOut;
+            newReserveB = reserveB + actualAmountIn;
         } else {
-            reserveB -= amountOut;
-            reserveA += actualAmountIn;
+            newReserveA = reserveA + actualAmountIn;
+            newReserveB = reserveB - amountOut;
         }
+
+        require(
+            newReserveA * newReserveB >= reserveA * reserveB,
+            "K invariant violation"
+        );
+
+        reserveA = newReserveA;
+        reserveB = newReserveB;
         tokenOut.safeTransfer(to, amountOut);
         emit Swap(msg.sender, to, swappingTo, actualAmountIn, amountOut);
         emit Sync(reserveA, reserveB);
@@ -250,9 +280,9 @@ contract Pair is ReentrancyGuard {
         );
         require(amountOut < reserveOut, "Insufficient liquidity");
 
-        uint256 numerator = reserveIn * amountOut * BASE;
+        uint256 numerator = (reserveIn * amountOut);
         uint256 denominator = (reserveOut - amountOut) * (BASE - FEE);
-        amountIn = (numerator / denominator) + 1;
+        amountIn = (numerator * BASE) / denominator + 1;
 
         return amountIn;
     }

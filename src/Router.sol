@@ -77,6 +77,11 @@ contract Router {
         address pairAddress = FACTORY.getPair(tokenA, tokenB);
         require(pairAddress != address(0), "Router: PAIR_NOT_EXIST");
 
+        require(shares > 0, "Router: INSUFFICIENT_SHARES");
+        require(
+            Pair(pairAddress).allowance(msg.sender, address(this)) >= shares,
+            "Router: INSUFFICIENT_ALLOWANCE"
+        );
         require(
             Pair(pairAddress).transferFrom(msg.sender, pairAddress, shares),
             "Router: TRANSFER_FAILED"
@@ -168,6 +173,7 @@ contract Router {
 
         IERC20(tokenIn).safeTransferFrom(msg.sender, pairAddress, amountIn);
 
+        // Pass amountIn for verification that correct amount was transferred
         amountOut = Pair(pairAddress).swap(
             amountIn,
             amountOutMin,
