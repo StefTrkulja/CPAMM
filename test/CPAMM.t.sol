@@ -578,8 +578,8 @@ contract CPAMMTest is Test {
         vm.startPrank(liquidityProvider);
         
         vm.expectRevert();
-        (bool success) = pair.transfer(user1, 1000 * 10**18);
-        
+        (bool success) =pair.transfer(user1, 1000 * 10**18);
+        assertFalse(success);
         vm.stopPrank();
     }
  // Proverava da li transfer na zero adresu revertuje
@@ -591,7 +591,7 @@ contract CPAMMTest is Test {
         
         vm.expectRevert();
         (bool success) = pair.transfer(address(0), 100);
-        
+        assertFalse(success);
         vm.stopPrank();
     }
     // Proverava da li transferFrom sa nedovoljnim allowance-om revertuje
@@ -605,6 +605,7 @@ contract CPAMMTest is Test {
         vm.prank(user1);
         vm.expectRevert();
         (bool success) = pair.transferFrom(liquidityProvider, user2, 100);
+				assertFalse(success);
     }
 
     // ROUTER ********************************************************************************************************
