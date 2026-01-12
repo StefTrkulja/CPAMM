@@ -10,6 +10,18 @@ contract Router {
     using SafeERC20 for IERC20;
     Factory public immutable FACTORY;
 
+    error Router__Expired();
+    error Router__InvalidToAddress();
+    error Router__PairNotExist();
+    error Router__InsufficientShares();
+    error Router__InsufficientAllowance();
+    error Router__TransferFailed();
+    error Router__InsufficientAAmount();
+    error Router__InsufficientBAmount();
+    error Router__InsufficientInputAmount();
+    error Router__InsufficientOutputAmount();
+    error Router__ExcessiveInputAmount();
+
     constructor(address factoryAddress) {
         FACTORY = Factory(factoryAddress);
     }
@@ -20,7 +32,7 @@ contract Router {
     }
 
     function _ensure(uint256 deadline) internal view {
-        require(deadline >= block.timestamp, "Router: EXPIRED");
+        if (deadline < block.timestamp) revert Router__Expired();
     }
 
     function addLiquidity(
@@ -37,10 +49,10 @@ contract Router {
         ensure(deadline)
         returns (uint256 amountA, uint256 amountB, uint256 shares)
     {
-        require(to != address(0), "Router: INVALID_TO_ADDRESS");
+        if (to == address(0)) revert Router__InvalidToAddress();
 
         address pairAddress = FACTORY.getPair(tokenA, tokenB);
-        require(pairAddress != address(0), "Router: PAIR_NOT_EXIST");
+        if (pairAddress == address(0)) revert Router__PairNotExist();
 
         (amountA, amountB) = calculateLiquidityAmounts(
             pairAddress,
@@ -72,20 +84,18 @@ contract Router {
         address to,
         uint256 deadline
     ) public ensure(deadline) returns (uint256 amountA, uint256 amountB) {
-        require(to != address(0), "Router: INVALID_TO_ADDRESS");
+        if (to == address(0)) revert Router__InvalidToAddress();
 
         address pairAddress = FACTORY.getPair(tokenA, tokenB);
-        require(pairAddress != address(0), "Router: PAIR_NOT_EXIST");
+        if (pairAddress == address(0)) revert Router__PairNotExist();
 
-        require(shares > 0, "Router: INSUFFICIENT_SHARES");
-        require(
-            Pair(pairAddress).allowance(msg.sender, address(this)) >= shares,
-            "Router: INSUFFICIENT_ALLOWANCE"
-        );
-        require(
-            Pair(pairAddress).transferFrom(msg.sender, pairAddress, shares),
-            "Router: TRANSFER_FAILED"
-        );
+        if (shares == 0) revert Router__InsufficientShares();
+        if (Pair(pairAddress).allowance(msg.sender, address(this)) < shares) {
+            revert Router__InsufficientAllowance();
+        }
+        if (!Pair(pairAddress).transferFrom(msg.sender, pairAddress, shares)) {
+            revert Router__TransferFailed();
+        }
 
         (uint256 amount0, uint256 amount1) = Pair(pairAddress).removeLiquidity(
             shares,
@@ -95,8 +105,8 @@ contract Router {
             ? (amount0, amount1)
             : (amount1, amount0);
 
-        require(amountA >= amountAMin, "Router: INSUFFICIENT_A_AMOUNT");
-        require(amountB >= amountBMin, "Router: INSUFFICIENT_B_AMOUNT");
+        if (amountA < amountAMin) revert Router__InsufficientAAmount();
+        if (amountB < amountBMin) revert Router__InsufficientBAmount();
 
         return (amountA, amountB);
     }
@@ -130,23 +140,20 @@ contract Router {
             uint256 amount1Optimal = (amountADesiredSorted * reserve1) /
                 reserve0;
             if (amount1Optimal <= amountBDesiredSorted) {
-                require(
-                    amount1Optimal >= amountBMinSorted,
-                    "Router: INSUFFICIENT_B_AMOUNT"
-                );
+                if (amount1Optimal < amountBMinSorted) {
+                    revert Router__InsufficientBAmount();
+                }
                 amount0 = amountADesiredSorted;
                 amount1 = amount1Optimal;
             } else {
                 uint256 amount0Optimal = (amountBDesiredSorted * reserve0) /
                     reserve1;
-                require(
-                    amount0Optimal <= amountADesiredSorted,
-                    "Router: INSUFFICIENT_A_AMOUNT"
-                );
-                require(
-                    amount0Optimal >= amountAMinSorted,
-                    "Router: INSUFFICIENT_A_AMOUNT"
-                );
+                if (amount0Optimal > amountADesiredSorted) {
+                    revert Router__InsufficientAAmount();
+                }
+                if (amount0Optimal < amountAMinSorted) {
+                    revert Router__InsufficientAAmount();
+                }
                 amount0 = amount0Optimal;
                 amount1 = amountBDesiredSorted;
             }
@@ -166,14 +173,13 @@ contract Router {
         address to,
         uint256 deadline
     ) public ensure(deadline) returns (uint256 amountOut) {
-        require(to != address(0), "Router: INVALID_TO_ADDRESS");
-        require(amountIn > 0, "Router: INSUFFICIENT_INPUT_AMOUNT");
+        if (to == address(0)) revert Router__InvalidToAddress();
+        if (amountIn == 0) revert Router__InsufficientInputAmount();
         address pairAddress = FACTORY.getPair(tokenIn, tokenOut);
-        require(pairAddress != address(0), "Router: PAIR_NOT_EXIST");
+        if (pairAddress == address(0)) revert Router__PairNotExist();
 
         IERC20(tokenIn).safeTransferFrom(msg.sender, pairAddress, amountIn);
 
-        // Pass amountIn for verification that correct amount was transferred
         amountOut = Pair(pairAddress).swap(
             amountIn,
             amountOutMin,
@@ -191,13 +197,13 @@ contract Router {
         address to,
         uint256 deadline
     ) public ensure(deadline) returns (uint256 amountIn) {
-        require(to != address(0), "Router: INVALID_TO_ADDRESS");
-        require(amountOut > 0, "Router: INSUFFICIENT_OUTPUT_AMOUNT");
+        if (to == address(0)) revert Router__InvalidToAddress();
+        if (amountOut == 0) revert Router__InsufficientOutputAmount();
         address pairAddress = FACTORY.getPair(tokenIn, tokenOut);
-        require(pairAddress != address(0), "Router: PAIR_NOT_EXIST");
+        if (pairAddress == address(0)) revert Router__PairNotExist();
 
         amountIn = Pair(pairAddress).getAmountIn(amountOut, tokenOut);
-        require(amountIn <= amountInMax, "Router: EXCESSIVE_INPUT_AMOUNT");
+        if (amountIn > amountInMax) revert Router__ExcessiveInputAmount();
 
         IERC20(tokenIn).safeTransferFrom(msg.sender, pairAddress, amountIn);
 
@@ -207,10 +213,7 @@ contract Router {
             tokenOut,
             to
         );
-        require(
-            actualAmountOut >= amountOut,
-            "Router: INSUFFICIENT_OUTPUT_AMOUNT"
-        );
+        if (actualAmountOut < amountOut) revert Router__InsufficientOutputAmount();
 
         return amountIn;
     }

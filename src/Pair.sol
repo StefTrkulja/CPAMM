@@ -52,9 +52,31 @@ contract Pair is ReentrancyGuard {
         uint256 value
     );
 
-
-    
-
+    error Pair__AmountsMustBeGreaterThanZero();
+    error Pair__InsufficientTokensTransferred();
+    error Pair__NoTokensReceived();
+    error Pair__InsufficientLiquidityMinted();
+    error Pair__InvalidAddress();
+    error Pair__CannotMintToPair();
+    error Pair__SharesMustBeGreaterThanZero();
+    error Pair__InsufficientSharesReceived();
+    error Pair__InsufficientAmountsToWithdraw();
+    error Pair__InsufficientReserves();
+    error Pair__InsufficientBalanceToBurn();
+    error Pair__AmountInMustBeGreaterThanZero();
+    error Pair__InvalidTokenToSwapTo();
+    error Pair__InsufficientLiquidityInPool();
+    error Pair__InsufficientAmountInAfterTransfer();
+    error Pair__AmountInMismatch();
+    error Pair__InsufficientOutputAmount();
+    error Pair__AmountOutMustBeGreaterThanZero();
+    error Pair__NotEnoughLiquidityForTrade();
+    error Pair__KInvariantViolation();
+    error Pair__TransferToZeroAddress();
+    error Pair__InsufficientBalance();
+    error Pair__InsufficientAllowance();
+    error Pair__InvalidTokenOutAddress();
+    error Pair__InsufficientLiquidity();
     constructor(address _tokenA, address _tokenB) {
         I_TOKEN_A = IERC20(_tokenA);
         I_TOKEN_B = IERC20(_tokenB);
@@ -65,29 +87,23 @@ contract Pair is ReentrancyGuard {
         uint256 amountB,
         address to
     ) external nonReentrant returns (uint256 sharesMinted) {
-        require(
-            amountA > 0 && amountB > 0,
-            "Amounts must be greater than zero"
-        );
+        if (amountA == 0 || amountB == 0) revert Pair__AmountsMustBeGreaterThanZero();
 
         uint256 balanceA = I_TOKEN_A.balanceOf(address(this));
         uint256 balanceB = I_TOKEN_B.balanceOf(address(this));
 
         uint256 actualAmountA = balanceA - reserveA;
         uint256 actualAmountB = balanceB - reserveB;
-        require(
-            actualAmountA >= amountA && actualAmountB >= amountB,
-            "Insufficient tokens transferred"
-        );
-        require(actualAmountA > 0 && actualAmountB > 0, "No tokens received");
+        if (actualAmountA < amountA || actualAmountB < amountB) {
+            revert Pair__InsufficientTokensTransferred();
+        }
+        if (actualAmountA == 0 || actualAmountB == 0) revert Pair__NoTokensReceived();
 
         if (totalSupply == 0) {
             sharesMinted = MathLib.sqrt(actualAmountA * actualAmountB);
-            require(
-                sharesMinted > MINIMUM_LIQUIDITY,
-                "Insufficient liquidity minted"
-            );
-            // Mint MINIMUM_LIQUIDITY to address(0) to prevent division by zero
+            if (sharesMinted <= MINIMUM_LIQUIDITY) {
+                revert Pair__InsufficientLiquidityMinted();
+            }
             mint(address(0), MINIMUM_LIQUIDITY);
             sharesMinted -= MINIMUM_LIQUIDITY;
         } else {
@@ -95,9 +111,9 @@ contract Pair is ReentrancyGuard {
             uint256 shareB = (actualAmountB * totalSupply) / reserveB;
             sharesMinted = MathLib.min(shareA, shareB);
         }
-        require(sharesMinted > 0, "Insufficient liquidity minted");
-        require(to != address(0), "Invalid address");
-        require(to != address(this), "Cannot mint to pair");
+        if (sharesMinted == 0) revert Pair__InsufficientLiquidityMinted();
+        if (to == address(0)) revert Pair__InvalidAddress();
+        if (to == address(this)) revert Pair__CannotMintToPair();
 
         mint(to, sharesMinted);
 
@@ -114,17 +130,17 @@ contract Pair is ReentrancyGuard {
         uint256 shares,
         address from
     ) external nonReentrant returns (uint256 amountA, uint256 amountB) {
-        require(shares > 0, "Shares must be greater than zero");
+        if (shares == 0) revert Pair__SharesMustBeGreaterThanZero();
         uint256 shareBalance = balances[address(this)];
-        require(shareBalance >= shares, "Insufficient shares received");
+        if (shareBalance < shares) revert Pair__InsufficientSharesReceived();
 
         amountA = (shares * reserveA) / totalSupply;
         amountB = (shares * reserveB) / totalSupply;
-        require(amountA > 0 && amountB > 0, "Insufficient amounts to withdraw");
-        require(
-            amountA <= reserveA && amountB <= reserveB,
-            "Insufficient reserves"
-        );
+        if (amountA == 0 || amountB == 0)
+            revert Pair__InsufficientAmountsToWithdraw();
+        if (amountA > reserveA || amountB > reserveB) {
+            revert Pair__InsufficientReserves();
+        }
         burn(address(this), shares);
         reserveA -= amountA;
         reserveB -= amountB;
@@ -143,7 +159,7 @@ contract Pair is ReentrancyGuard {
     }
 
     function burn(address from, uint256 shares) private {
-        require(balances[from] >= shares, "Insufficient balance to burn");
+        if (balances[from] < shares) revert Pair__InsufficientBalanceToBurn();
         balances[from] -= shares;
         totalSupply -= shares;
         emit Transfer(from, address(0), shares);
@@ -155,12 +171,12 @@ contract Pair is ReentrancyGuard {
         address swappingTo,
         address to
     ) external nonReentrant returns (uint256 amountOut) {
-        require(amountIn > 0, "AmountIn must be greater than zero");
-        require(
-            swappingTo == address(I_TOKEN_A) ||
-                swappingTo == address(I_TOKEN_B),
-            "Invalid token to swap to"
-        );
+        if (amountIn == 0) revert Pair__AmountInMustBeGreaterThanZero();
+        if (
+            swappingTo != address(I_TOKEN_A) && swappingTo != address(I_TOKEN_B)
+        ) {
+            revert Pair__InvalidTokenToSwapTo();
+        }
         bool isSwappingToA = swappingTo == address(I_TOKEN_A);
         (
             IERC20 tokenIn,
@@ -171,25 +187,21 @@ contract Pair is ReentrancyGuard {
                 ? (I_TOKEN_B, I_TOKEN_A, reserveB, reserveA)
                 : (I_TOKEN_A, I_TOKEN_B, reserveA, reserveB);
 
-        require(
-            reserveIn > 0 && reserveOut > 0,
-            "Insufficient liquidity in the pool"
-        );
+        if (reserveIn == 0 || reserveOut == 0) {
+            revert Pair__InsufficientLiquidityInPool();
+        }
 
         uint256 balanceIn = tokenIn.balanceOf(address(this));
         uint256 actualAmountIn = balanceIn - reserveIn;
-        require(actualAmountIn > 0, "Insufficient amount in after transfer");
-        require(
-            actualAmountIn >= amountIn,
-            "AmountIn mismatch - not enough tokens transferred"
-        );
+        if (actualAmountIn == 0) revert Pair__InsufficientAmountInAfterTransfer();
+        if (actualAmountIn < amountIn) revert Pair__AmountInMismatch();
         uint256 amountInWithFee = (actualAmountIn * (BASE - FEE)) / BASE;
         amountOut =
             (amountInWithFee * reserveOut) /
             (reserveIn + amountInWithFee);
-        require(amountOut >= minAmountOut, "Insufficient output amount");
-        require(amountOut > 0, "AmountOut must be greater than zero");
-        require(amountOut < reserveOut, "Not enough liquidity for this trade");
+        if (amountOut < minAmountOut) revert Pair__InsufficientOutputAmount();
+        if (amountOut == 0) revert Pair__AmountOutMustBeGreaterThanZero();
+        if (amountOut >= reserveOut) revert Pair__NotEnoughLiquidityForTrade();
 
         uint256 newReserveA;
         uint256 newReserveB;
@@ -201,10 +213,9 @@ contract Pair is ReentrancyGuard {
             newReserveB = reserveB - amountOut;
         }
 
-        require(
-            newReserveA * newReserveB >= reserveA * reserveB,
-            "K invariant violation"
-        );
+        if (newReserveA * newReserveB < reserveA * reserveB) {
+            revert Pair__KInvariantViolation();
+        }
 
         reserveA = newReserveA;
         reserveB = newReserveB;
@@ -229,13 +240,12 @@ contract Pair is ReentrancyGuard {
         address to,
         uint256 amount
     ) external returns (bool) {
-        require(to != address(0), "Transfer to zero address");
-        require(balances[from] >= amount, "Insufficient balance");
+        if (to == address(0)) revert Pair__TransferToZeroAddress();
+        if (balances[from] < amount) revert Pair__InsufficientBalance();
         if (from != msg.sender) {
-            require(
-                allowance[from][msg.sender] >= amount,
-                "Insufficient allowance"
-            );
+            if (allowance[from][msg.sender] < amount) {
+                revert Pair__InsufficientAllowance();
+            }
             allowance[from][msg.sender] -= amount;
             emit Approval(from, msg.sender, allowance[from][msg.sender]);
         }
@@ -246,8 +256,8 @@ contract Pair is ReentrancyGuard {
     }
 
     function transfer(address to, uint256 amount) external returns (bool) {
-        require(to != address(0), "Transfer to zero address");
-        require(balances[msg.sender] >= amount, "Insufficient balance");
+        if (to == address(0)) revert Pair__TransferToZeroAddress();
+        if (balances[msg.sender] < amount) revert Pair__InsufficientBalance();
         balances[msg.sender] -= amount;
         balances[to] += amount;
         emit Transfer(msg.sender, to, amount);
@@ -264,21 +274,19 @@ contract Pair is ReentrancyGuard {
         uint256 amountOut,
         address tokenOut
     ) external view returns (uint256 amountIn) {
-        require(amountOut > 0, "AmountOut must be greater than zero");
-        require(
-            tokenOut == address(I_TOKEN_A) || tokenOut == address(I_TOKEN_B),
-            "Invalid tokenOut address"
-        );
+        if (amountOut == 0) revert Pair__AmountOutMustBeGreaterThanZero();
+        if (tokenOut != address(I_TOKEN_A) && tokenOut != address(I_TOKEN_B)) {
+            revert Pair__InvalidTokenOutAddress();
+        }
 
         bool isTokenOutA = tokenOut == address(I_TOKEN_A);
         (uint256 reserveIn, uint256 reserveOut) = isTokenOutA
             ? (reserveB, reserveA)
             : (reserveA, reserveB);
-        require(
-            reserveIn > 0 && reserveOut > 0,
-            "Insufficient liquidity in the pool"
-        );
-        require(amountOut < reserveOut, "Insufficient liquidity");
+        if (reserveIn == 0 || reserveOut == 0) {
+            revert Pair__InsufficientLiquidityInPool();
+        }
+        if (amountOut >= reserveOut) revert Pair__InsufficientLiquidity();
 
         uint256 numerator = (reserveIn * amountOut);
         uint256 denominator = (reserveOut - amountOut) * (BASE - FEE);

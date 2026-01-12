@@ -7,6 +7,11 @@ import {Pair} from "./Pair.sol";
 contract Factory {
     address[] public allPairs;
     mapping(address => mapping(address => address)) public getPair;
+
+    error Factory__IdenticalAddresses();
+    error Factory__ZeroAddress();
+    error Factory__PairExists();
+
     event PairCreated(
         address indexed tokenA,
         address indexed tokenB,
@@ -22,15 +27,14 @@ contract Factory {
         address tokenA,
         address tokenB
     ) external returns (address pair) {
-        require(tokenA != tokenB, "Factory: IDENTICAL_ADDRESSES");
-        require(
-            tokenA != address(0) && tokenB != address(0),
-            "Factory: ZERO_ADDRESS"
-        );
+        if (tokenA == tokenB) revert Factory__IdenticalAddresses();
+        if (tokenA == address(0) || tokenB == address(0)) {
+            revert Factory__ZeroAddress();
+        }
         (address token0, address token1) = tokenA < tokenB
             ? (tokenA, tokenB)
             : (tokenB, tokenA);
-        require(getPair[token0][token1] == address(0), "Factory: PAIR_EXISTS");
+        if (getPair[token0][token1] != address(0)) revert Factory__PairExists();
         pair = address(new Pair(token0, token1));
 
         getPair[token0][token1] = pair;
