@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
-import {Test, console} from "../lib/forge-std/src/Test.sol";
+import {Test} from "../lib/forge-std/src/Test.sol";
 import {Factory} from "../src/Factory.sol";
 import {Pair} from "../src/Pair.sol";
 import {Router} from "../src/Router.sol";
 import {IERC20} from "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {ERC20Mock} from "../lib/openzeppelin-contracts/contracts/mocks/token/ERC20Mock.sol";
 import {MathLib} from "../lib/MathLib.sol";
+import {SafeERC20} from "../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract CPAMMTest is Test {
-
+		using SafeERC20 for ERC20Mock;	
     Factory public factory;
     Router public router;
     Pair public pair;
@@ -134,8 +135,8 @@ contract CPAMMTest is Test {
     function testPair__FirstLiquidityProviderMinting() external {
         vm.startPrank(liquidityProvider);
         
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         
         uint256 lpTokensMinted = pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, liquidityProvider);
         
@@ -143,34 +144,34 @@ contract CPAMMTest is Test {
         assertEq(reserveA, LIQUIDITY_AMOUNT_A);
         assertEq(reserveB, LIQUIDITY_AMOUNT_B);
         
-        uint256 expectedLP = MathLib.sqrt(LIQUIDITY_AMOUNT_A * LIQUIDITY_AMOUNT_B) - MINIMUM_LIQUIDITY;
-        assertEq(lpTokensMinted, expectedLP);
-        assertEq(pair.balanceOf(liquidityProvider), expectedLP);
-        assertEq(pair.totalSupply(), expectedLP + MINIMUM_LIQUIDITY);
+        uint256 expectedLp = MathLib.sqrt(LIQUIDITY_AMOUNT_A * LIQUIDITY_AMOUNT_B) - MINIMUM_LIQUIDITY;
+        assertEq(lpTokensMinted, expectedLp);
+        assertEq(pair.balanceOf(liquidityProvider), expectedLp);
+        assertEq(pair.totalSupply(), expectedLp + MINIMUM_LIQUIDITY);
         
         vm.stopPrank();
     }
 
     function testPair__SubsequentLiquidityProviderMinting() external {
         vm.startPrank(user1);
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, user1);
         vm.stopPrank();
         
         vm.startPrank(user2);
         uint256 amountA = LIQUIDITY_AMOUNT_A / 2;
         uint256 amountB = LIQUIDITY_AMOUNT_B / 2;
-        tokenA.transfer(address(pair), amountA);
-        tokenB.transfer(address(pair), amountB);
+        tokenA.safeTransfer(address(pair), amountA);
+        tokenB.safeTransfer(address(pair), amountB);
         
         uint256 totalSupply = pair.totalSupply();
-        uint256 expectedLP = MathLib.min((amountA * totalSupply) / LIQUIDITY_AMOUNT_A, (amountB * totalSupply) / LIQUIDITY_AMOUNT_B);
+        uint256 expectedLp = MathLib.min((amountA * totalSupply) / LIQUIDITY_AMOUNT_A, (amountB * totalSupply) / LIQUIDITY_AMOUNT_B);
         
-        uint256 secondLP = pair.addLiquidity(amountA, amountB, user2);
+        uint256 secondLp = pair.addLiquidity(amountA, amountB, user2);
         
-        assertEq(secondLP, expectedLP);
-        assertEq(pair.balanceOf(user2), expectedLP);
+        assertEq(secondLp, expectedLp);
+        assertEq(pair.balanceOf(user2), expectedLp);
         
         vm.stopPrank();
     }
@@ -178,8 +179,8 @@ contract CPAMMTest is Test {
     function testPair__MintEmitsCorrectEvents() external {
         vm.startPrank(liquidityProvider);
         
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         
         vm.expectEmit(true, false, false, false);
         emit Pair.Mint(liquidityProvider, 0, 0, 0);
@@ -192,8 +193,8 @@ contract CPAMMTest is Test {
     function testPair__UpdateReservesAfterMint() external {
         vm.startPrank(liquidityProvider);
         
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, liquidityProvider);
         
         (uint256 reserveA, uint256 reserveB) = pair.getReserves();
@@ -206,13 +207,13 @@ contract CPAMMTest is Test {
     function testPair__MintsCorrectLPAmount() external {
         vm.startPrank(liquidityProvider);
         
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         
-        uint256 expectedLP = MathLib.sqrt(LIQUIDITY_AMOUNT_A * LIQUIDITY_AMOUNT_B) - MINIMUM_LIQUIDITY;
-        uint256 actualLP = pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, liquidityProvider);
+        uint256 expectedLp = MathLib.sqrt(LIQUIDITY_AMOUNT_A * LIQUIDITY_AMOUNT_B) - MINIMUM_LIQUIDITY;
+        uint256 actualLp = pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, liquidityProvider);
         
-        assertEq(actualLP, expectedLP);
+        assertEq(actualLp, expectedLp);
         
         vm.stopPrank();
     }
@@ -220,8 +221,8 @@ contract CPAMMTest is Test {
     function testPair__LockMinimumLiquidity() external {
         vm.startPrank(liquidityProvider);
         
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, liquidityProvider);
 
         assertEq(pair.balanceOf(address(0)), MINIMUM_LIQUIDITY);
@@ -243,8 +244,8 @@ contract CPAMMTest is Test {
     function testPair__InsufficientLiquidityMintedReverts() external {
         vm.startPrank(liquidityProvider);
         
-        tokenA.transfer(address(pair), 100);
-        tokenB.transfer(address(pair), 100);
+        tokenA.safeTransfer(address(pair), 100);
+        tokenB.safeTransfer(address(pair), 100);
         
         vm.expectRevert(Pair.Pair__InsufficientLiquidityMinted.selector);
         pair.addLiquidity(100, 100, liquidityProvider);
@@ -255,8 +256,8 @@ contract CPAMMTest is Test {
     function testPair__MintToZeroAddressReverts() external {
         vm.startPrank(liquidityProvider);
         
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         
         vm.expectRevert(Pair.Pair__InvalidAddress.selector);
         pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, address(0));
@@ -268,12 +269,12 @@ contract CPAMMTest is Test {
 
     function testPair__BurnLiquidityTokens() external {
         vm.startPrank(liquidityProvider);
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         uint256 lpTokens = pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, liquidityProvider);
         
         uint256 burnAmount = lpTokens / 2;
-        pair.transfer(address(pair), burnAmount);
+        assertTrue(pair.transfer(address(pair), burnAmount));
         
         (uint256 amountA, uint256 amountB) = pair.removeLiquidity(burnAmount, liquidityProvider);
         
@@ -287,12 +288,12 @@ contract CPAMMTest is Test {
     function testPair__ReturnsCorrectAmountsOnBurn() external {
         vm.startPrank(liquidityProvider);
         
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         uint256 lpTokens = pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, liquidityProvider);
         
         uint256 burnAmount = lpTokens / 2;
-        pair.transfer(address(pair), burnAmount);
+        assertTrue(pair.transfer(address(pair), burnAmount));
         
         uint256 totalSupply = pair.totalSupply();
         uint256 expectedAmountA = (burnAmount * LIQUIDITY_AMOUNT_A) / totalSupply;
@@ -309,12 +310,12 @@ contract CPAMMTest is Test {
     function testPair__UpdateReservesAfterBurn() external {
         vm.startPrank(liquidityProvider);
         
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         uint256 lpTokens = pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, liquidityProvider);
         
         uint256 burnAmount = lpTokens / 2;
-        pair.transfer(address(pair), burnAmount);
+        assertTrue(pair.transfer(address(pair), burnAmount));
         
         (uint256 amountA, uint256 amountB) = pair.removeLiquidity(burnAmount, liquidityProvider);
         
@@ -346,14 +347,14 @@ contract CPAMMTest is Test {
     function testPair__SwapExactAForB() external {
 
         vm.startPrank(liquidityProvider);
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, liquidityProvider);
         vm.stopPrank();
         
         vm.startPrank(user1);
         uint256 amountIn = 100 * 10**18;
-        tokenA.transfer(address(pair), amountIn);
+        tokenA.safeTransfer(address(pair), amountIn);
         
         uint256 balanceBefore = tokenB.balanceOf(user1);
         uint256 amountOut = pair.swap(amountIn, 1, address(tokenB), user1);
@@ -368,14 +369,14 @@ contract CPAMMTest is Test {
     function testPair__SwapExactBForA() external {
 
         vm.startPrank(liquidityProvider);
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, liquidityProvider);
         vm.stopPrank();
         
         vm.startPrank(user1);
         uint256 amountIn = 100 * 10**18;
-        tokenB.transfer(address(pair), amountIn);
+        tokenB.safeTransfer(address(pair), amountIn);
         
         uint256 balanceBefore = tokenA.balanceOf(user1);
         uint256 amountOut = pair.swap(amountIn, 1, address(tokenA), user1);
@@ -389,14 +390,14 @@ contract CPAMMTest is Test {
 
     function testPair__UpdateReservesAfterSwap() external {
         vm.startPrank(liquidityProvider);
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, liquidityProvider);
         vm.stopPrank();
         
         vm.startPrank(user1);
         uint256 amountIn = 100 * 10**18;
-        tokenA.transfer(address(pair), amountIn);
+        tokenA.safeTransfer(address(pair), amountIn);
         
         uint256 amountOut = pair.swap(amountIn, 1, address(tokenB), user1);
         
@@ -409,14 +410,14 @@ contract CPAMMTest is Test {
 
     function testPair__AppliesFeeOnSwap() external {
         vm.startPrank(liquidityProvider);
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, liquidityProvider);
         vm.stopPrank();
         
         vm.startPrank(user1);
         uint256 amountIn = 100 * 10**18;
-        tokenA.transfer(address(pair), amountIn);
+        tokenA.safeTransfer(address(pair), amountIn);
         
         uint256 amountInWithFee = (amountIn * 970) / 1000;
         uint256 expectedOut = (amountInWithFee * LIQUIDITY_AMOUNT_B) / (LIQUIDITY_AMOUNT_A + amountInWithFee);
@@ -430,8 +431,8 @@ contract CPAMMTest is Test {
 
     function testPair__MaintainsConstantProductInvariant() external {
         vm.startPrank(liquidityProvider);
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, liquidityProvider);
         vm.stopPrank();
         
@@ -439,7 +440,7 @@ contract CPAMMTest is Test {
         
         vm.startPrank(user1);
         uint256 amountIn = 100 * 10**18;
-        tokenA.transfer(address(pair), amountIn);
+        tokenA.safeTransfer(address(pair), amountIn);
         pair.swap(amountIn, 1, address(tokenB), user1);
         
         (uint256 reserveA, uint256 reserveB) = pair.getReserves();
@@ -467,7 +468,7 @@ contract CPAMMTest is Test {
     function testPair__SwapInsufficientLiquidityReverts() external {
         vm.startPrank(user1);
         
-        tokenA.transfer(address(pair), 100 * 10**18);
+        tokenA.safeTransfer(address(pair), 100 * 10**18);
         
         vm.expectRevert(Pair.Pair__InsufficientLiquidityInPool.selector);
         pair.swap(100 * 10**18, 1, address(tokenB), user1);
@@ -477,14 +478,14 @@ contract CPAMMTest is Test {
 
     function testPair__SwapInsufficientOutputAmountReverts() external {
         vm.startPrank(liquidityProvider);
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, liquidityProvider);
         vm.stopPrank();
         
         vm.startPrank(user1);
         uint256 amountIn = 1 * 10**18;
-        tokenA.transfer(address(pair), amountIn);
+        tokenA.safeTransfer(address(pair), amountIn);
         
         vm.expectRevert(Pair.Pair__InsufficientOutputAmount.selector);
         pair.swap(amountIn, 1000 * 10**18, address(tokenB), user1);
@@ -496,12 +497,12 @@ contract CPAMMTest is Test {
 
     function testPair__TransferLPTokens() external {
         vm.startPrank(liquidityProvider);
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         uint256 lpTokens = pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, liquidityProvider);
         
         uint256 transferAmount = lpTokens / 2;
-        pair.transfer(user1, transferAmount);
+        assertTrue(pair.transfer(user1, transferAmount));
         
         assertEq(pair.balanceOf(user1), transferAmount);
         assertEq(pair.balanceOf(liquidityProvider), lpTokens - transferAmount);
@@ -521,8 +522,8 @@ contract CPAMMTest is Test {
 
     function testPair__TransferFromLPTokens() external {
         vm.startPrank(liquidityProvider);
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         uint256 lpTokens = pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, liquidityProvider);
         
         uint256 transferAmount = lpTokens / 2;
@@ -530,21 +531,21 @@ contract CPAMMTest is Test {
         vm.stopPrank();
         
         vm.prank(user1);
-        pair.transferFrom(liquidityProvider, user2, transferAmount);
+        assertTrue(pair.transferFrom(liquidityProvider, user2, transferAmount));
         
         assertEq(pair.balanceOf(user2), transferAmount);
     }
 
     function testPair__TransferEmitsEvent() external {
         vm.startPrank(liquidityProvider);
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, liquidityProvider);
         
         vm.expectEmit(true, true, false, true);
         emit IERC20.Transfer(liquidityProvider, user1, 100);
         
-        pair.transfer(user1, 100);
+        assertTrue(pair.transfer(user1, 100));
         
         vm.stopPrank();
     }
@@ -564,33 +565,33 @@ contract CPAMMTest is Test {
         vm.startPrank(liquidityProvider);
         
         vm.expectRevert();
-        pair.transfer(user1, 1000 * 10**18);
+        (bool success) = pair.transfer(user1, 1000 * 10**18);
         
         vm.stopPrank();
     }
 
     function testPair__TransferToZeroAddressReverts() external {
         vm.startPrank(liquidityProvider);
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, liquidityProvider);
         
         vm.expectRevert();
-        pair.transfer(address(0), 100);
+        (bool success) = pair.transfer(address(0), 100);
         
         vm.stopPrank();
     }
 
     function testPair__TransferFromInsufficientAllowanceReverts() external {
         vm.startPrank(liquidityProvider);
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, liquidityProvider);
         vm.stopPrank();
         
         vm.prank(user1);
         vm.expectRevert();
-        pair.transferFrom(liquidityProvider, user2, 100);
+        (bool success) = pair.transferFrom(liquidityProvider, user2, 100);
     }
 
     // ROUTER ********************************************************************************************************
@@ -735,14 +736,14 @@ contract CPAMMTest is Test {
         tokenA.mint(liquidityProvider, largeAmount * 2);
         tokenB.mint(liquidityProvider, largeAmount * 2);
         
-        tokenA.transfer(address(pair), largeAmount);
-        tokenB.transfer(address(pair), largeAmount);
+        tokenA.safeTransfer(address(pair), largeAmount);
+        tokenB.safeTransfer(address(pair), largeAmount);
         
         uint256 lpTokens = pair.addLiquidity(largeAmount, largeAmount, liquidityProvider);
         assertGt(lpTokens, 0);
         
         uint256 swapAmount = largeAmount / 10;
-        tokenA.transfer(address(pair), swapAmount);
+        tokenA.safeTransfer(address(pair), swapAmount);
         uint256 amountOut = pair.swap(swapAmount, 1, address(tokenB), liquidityProvider);
         assertGt(amountOut, 0);
         
@@ -751,15 +752,15 @@ contract CPAMMTest is Test {
 
     function testSecurity__CannotDrainReserves() external {
         vm.startPrank(liquidityProvider);
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, liquidityProvider);
         vm.stopPrank();
         
         vm.startPrank(user1);
         uint256 attackAmount = LIQUIDITY_AMOUNT_A * 100;
         tokenA.mint(user1, attackAmount);
-        tokenA.transfer(address(pair), attackAmount);
+        tokenA.safeTransfer(address(pair), attackAmount);
         
         vm.expectRevert(Pair.Pair__InsufficientOutputAmount.selector);
         pair.swap(attackAmount, LIQUIDITY_AMOUNT_B, address(tokenB), user1);
@@ -769,8 +770,8 @@ contract CPAMMTest is Test {
 
     function testSecurity__PriceManipulationResistance() external {
         vm.startPrank(liquidityProvider);
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, liquidityProvider);
         vm.stopPrank();
         
@@ -779,7 +780,7 @@ contract CPAMMTest is Test {
         
         vm.startPrank(user1);
         uint256 swapAmount = LIQUIDITY_AMOUNT_A / 2;
-        tokenA.transfer(address(pair), swapAmount);
+        tokenA.safeTransfer(address(pair), swapAmount);
         pair.swap(swapAmount, 1, address(tokenB), user1);
         vm.stopPrank();
         
@@ -790,8 +791,8 @@ contract CPAMMTest is Test {
 
     function testSecurity__MinimumLiquidityLock() external {
         vm.startPrank(liquidityProvider);
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, liquidityProvider);
         
         assertEq(pair.balanceOf(address(0)), 1000, "Minimum liquidity not locked");
@@ -805,14 +806,14 @@ contract CPAMMTest is Test {
 
     function testSecurity__CannotStealTokensByDirectTransfer() external {
         vm.startPrank(liquidityProvider);
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, liquidityProvider);
         vm.stopPrank();
         
         vm.startPrank(user1);
         uint256 attackAmount = 100 * 10**18;
-        tokenA.transfer(address(pair), attackAmount);
+        tokenA.safeTransfer(address(pair), attackAmount);
         
         vm.expectRevert(Pair.Pair__AmountInMustBeGreaterThanZero.selector);
         pair.swap(0, 1, address(tokenB), user1);
@@ -822,14 +823,14 @@ contract CPAMMTest is Test {
 
     function testSecurity__SlippageProtection() external {
         vm.startPrank(liquidityProvider);
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, liquidityProvider);
         vm.stopPrank();
         
         vm.startPrank(user1);
         uint256 swapAmount = 10 * 10**18;
-        tokenA.transfer(address(pair), swapAmount);
+        tokenA.safeTransfer(address(pair), swapAmount);
         
         vm.expectRevert(Pair.Pair__InsufficientOutputAmount.selector);
         pair.swap(swapAmount, LIQUIDITY_AMOUNT_B / 2, address(tokenB), user1);
@@ -839,8 +840,8 @@ contract CPAMMTest is Test {
 
     function testSecurity__KInvariantValidation() external {
         vm.startPrank(liquidityProvider);
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, liquidityProvider);
         vm.stopPrank();
         
@@ -849,7 +850,7 @@ contract CPAMMTest is Test {
         vm.startPrank(user1);
         for (uint i = 0; i < 5; i++) {
             uint256 swapAmount = 5 * 10**18;
-            tokenA.transfer(address(pair), swapAmount);
+            assertTrue(tokenA.transfer(address(pair), swapAmount));
             pair.swap(swapAmount, 1, address(tokenB), user1);
         }
         vm.stopPrank();
@@ -862,8 +863,8 @@ contract CPAMMTest is Test {
 
     function testSecurity__NoTokenApprovalBypass() external {
         vm.startPrank(liquidityProvider);
-        tokenA.transfer(address(pair), LIQUIDITY_AMOUNT_A);
-        tokenB.transfer(address(pair), LIQUIDITY_AMOUNT_B);
+        tokenA.safeTransfer(address(pair), LIQUIDITY_AMOUNT_A);
+        tokenB.safeTransfer(address(pair), LIQUIDITY_AMOUNT_B);
         uint256 lpTokens = pair.addLiquidity(LIQUIDITY_AMOUNT_A, LIQUIDITY_AMOUNT_B, liquidityProvider);
         vm.stopPrank();
         
